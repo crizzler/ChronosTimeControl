@@ -171,10 +171,11 @@ namespace Chronos
 			time = 0;
 
 			if (source.useAutoRandomSeed)
-            {
+			{
+				// Instead of pausing the system, stop it completely before modifying the random seed.
 				if (source.isPlaying)
 				{
-					source.Pause(true);
+					source.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 				}
 
 				source.useAutoRandomSeed = false;
@@ -220,7 +221,7 @@ namespace Chronos
 
 			// Known issue: low time scales / speed will cause stutter
 			// Reported here: http://fogbugz.unity3d.com/default.asp?694191_dso514lin4rf5vbg
-			
+
 			component.Simulate(0, true, true);
 
 			if (loopedSimulationTime > 0)
