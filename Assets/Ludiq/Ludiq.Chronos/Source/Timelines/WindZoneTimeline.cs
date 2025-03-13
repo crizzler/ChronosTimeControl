@@ -1,3 +1,5 @@
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 
 namespace Chronos
@@ -10,7 +12,7 @@ namespace Chronos
 		private float _windPulseMagnitude;
 
 		/// <summary>
-		/// The wind that is applied to the wind zone before time effects. Use this property instead of WindZone.windMain, which will be overwritten by the timeline at runtime. 
+		/// The wind applied to the wind zone before time effects.
 		/// </summary>
 		public float windMain
 		{
@@ -23,7 +25,7 @@ namespace Chronos
 		}
 
 		/// <summary>
-		/// The turbulence that is applied to the wind zone before time effects. Use this property instead of WindZone.windTurbulence, which will be overwritten by the timeline at runtime. 
+		/// The turbulence applied to the wind zone before time effects.
 		/// </summary>
 		public float windTurbulence
 		{
@@ -36,7 +38,7 @@ namespace Chronos
 		}
 
 		/// <summary>
-		/// The pulse magnitude that is applied to the wind zone before time effects. Use this property instead of WindZone.windPulseMagnitude, which will be overwritten by the timeline at runtime. 
+		/// The pulse magnitude applied to the wind zone before time effects.
 		/// </summary>
 		public float windPulseMagnitude
 		{
@@ -49,7 +51,7 @@ namespace Chronos
 		}
 
 		/// <summary>
-		/// The pulse frquency that is applied to the wind zone before time effects. Use this property instead of WindZone.windPulseFrequency, which will be overwritten by the timeline at runtime. 
+		/// The pulse frequency applied to the wind zone before time effects.
 		/// </summary>
 		public float windPulseFrequency
 		{
@@ -73,9 +75,32 @@ namespace Chronos
 
 		public override void AdjustProperties(float timeScale)
 		{
-			component.windTurbulence = windTurbulence * timeScale * Mathf.Abs(timeScale);
-			component.windPulseFrequency = windPulseFrequency * timeScale;
-			component.windPulseMagnitude = windPulseMagnitude * Mathf.Sign(timeScale);
+			// Offload the property multiplications to a Burst-compiled job.
+			NativeArray<float> turbulence = new NativeArray<float>(1, Allocator.TempJob);
+			NativeArray<float> pulseFreq = new NativeArray<float>(1, Allocator.TempJob);
+			NativeArray<float> pulseMag = new NativeArray<float>(1, Allocator.TempJob);
+
+			var job = new WindZonePropertiesJob
+			{
+				windTurbulence = windTurbulence,
+				windPulseFrequency = windPulseFrequency,
+				windPulseMagnitude = windPulseMagnitude,
+				timeScale = timeScale,
+				turbulenceResult = turbulence,
+				pulseFrequencyResult = pulseFreq,
+				pulseMagnitudeResult = pulseMag
+			};
+
+			JobHandle handle = job.Schedule();
+			handle.Complete();
+
+			component.windTurbulence = turbulence[0];
+			component.windPulseFrequency = pulseFreq[0];
+			component.windPulseMagnitude = pulseMag[0];
+
+			turbulence.Dispose();
+			pulseFreq.Dispose();
+			pulseMag.Dispose();
 		}
 	}
 }

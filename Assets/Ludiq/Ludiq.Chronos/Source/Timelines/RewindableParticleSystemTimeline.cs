@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Jobs;
 using UnityEngine;
 
 namespace Chronos
@@ -187,12 +188,10 @@ namespace Chronos
 		{
 			if (timeline.timeScale < 0)
 			{
-				// Determine state by consuming state events
-
+				// Consume state events.
 				if (stateEvents.Count > 0)
 				{
 					StateEvent lastStateEvent = stateEvents[stateEvents.Count - 1];
-
 					if (stateEventsTime <= lastStateEvent.time)
 					{
 						stateEvents.Remove(lastStateEvent);
@@ -208,8 +207,7 @@ namespace Chronos
 					}
 				}
 
-				// Consume emission events
-
+				// Consume emission events.
 				for (int i = emissionEvents.Count - 1; i >= 0; i--)
 				{
 					if (emissionEvents[i].time > emissionEventsTime)
@@ -219,27 +217,20 @@ namespace Chronos
 				}
 			}
 
-			// Known issue: low time scales / speed will cause stutter
-			// Reported here: http://fogbugz.unity3d.com/default.asp?694191_dso514lin4rf5vbg
-
+			// Simulate with a zero delta to reset simulation state.
 			component.Simulate(0, true, true);
 
 			if (loopedSimulationTime > 0)
 			{
 				var emission = component.emission;
-
 				emission.enabled = enableEmissionOnStart;
-
 				float chunkStartTime = 0;
 
 				for (int i = 0; i < emissionEvents.Count; i++)
 				{
 					EmissionEvent current = emissionEvents[i];
-
 					component.Simulate(current.time - chunkStartTime, true, false);
-
 					emission.enabled = current.action == EmissionAction.Play || current.action == EmissionAction.EnableEmission;
-
 					chunkStartTime = current.time;
 				}
 
@@ -251,30 +242,37 @@ namespace Chronos
 				}
 			}
 
+			// Offload simulation time update to a Burst job.
 			if (state == State.Playing || state == State.Stopping)
 			{
-				absoluteSimulationTime += timeline.deltaTime * playbackSpeed;
-
-				if (state == State.Playing && !component.main.loop && absoluteSimulationTime >= component.main.duration)
-				{
-					// A bit hacky to stop it here, as the real system just goes on playing,
-					// just without emitting, but it shouldn't cause any problem. Unfortunately,
-					// there is no check on Unity's side to see if it entered that final state.
-					state = State.Stopping;
-				}
-
-				// Can be performance intensive at high times.
-				// Limit it with a loop-multiple of its time (globally configurable)
-
+				// Gather required parameters.
+				float deltaTime = timeline.deltaTime;
+				float speed = playbackSpeed;
+				float currentAbsTime = absoluteSimulationTime;
+				var mainModule = component.main;
+				float duration = mainModule.duration;
+				bool looping = mainModule.loop;
 				float maxLoops = Timekeeper.instance.maxParticleLoops;
 
-				if (maxLoops > 0 && state != State.Stopping)
+				// Schedule the job.
+				ParticleSystemTimeUpdateJob timeJob = new ParticleSystemTimeUpdateJob
 				{
-					loopedSimulationTime = absoluteSimulationTime % (component.main.duration * maxLoops);
-				}
-				else
+					deltaTime = deltaTime,
+					playbackSpeed = speed,
+					currentAbsoluteTime = currentAbsTime,
+					duration = duration,
+					maxLoops = maxLoops,
+					looping = looping
+				};
+				JobHandle handle = timeJob.Schedule();
+				handle.Complete();
+
+				// Update simulation times.
+				absoluteSimulationTime = timeJob.newAbsoluteTime;
+				loopedSimulationTime = timeJob.newLoopedTime;
+				if (timeJob.shouldStop)
 				{
-					loopedSimulationTime = absoluteSimulationTime;
+					state = State.Stopping;
 				}
 			}
 		}
@@ -318,7 +316,6 @@ namespace Chronos
 			if (!AssertForwardMethod("Stop", Severity.Warn)) return;
 
 			state = State.Stopping;
-
 			RegisterEmission(EmissionAction.Stop);
 
 			if (withChildren)
@@ -347,11 +344,8 @@ namespace Chronos
 		#region Hierarchy
 
 		private delegate void ChildNativeAction(ParticleSystem target);
-
 		private delegate void ChildChronosAction(IParticleSystemTimeline target);
-
 		private delegate bool ChildNativeCheck(ParticleSystem target);
-
 		private delegate bool ChildChronosCheck(IParticleSystemTimeline target);
 
 		private void ExecuteOnChildren(ChildNativeAction native, ChildChronosAction chronos)

@@ -1,3 +1,5 @@
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 
 namespace Chronos
@@ -22,9 +24,8 @@ namespace Chronos
 				if (lastTimeScale > 0)
 				{
 					zeroSnapshot = CopySnapshot();
-					
-					var nav = component.GetComponent<UnityEngine.AI.NavMeshAgent>();
 
+					var nav = component.GetComponent<UnityEngine.AI.NavMeshAgent>();
 					if (nav != null)
 					{
 						zeroDestination = nav.destination;
@@ -34,7 +35,6 @@ namespace Chronos
 				{
 					zeroSnapshot = interpolatedSnapshot;
 				}
-
 				zeroTime = timeline.time;
 			}
 
@@ -47,19 +47,16 @@ namespace Chronos
 					interpolatedSnapshot = laterSnapshot;
 					canRewind = TryFindEarlierSnapshot(false);
 				}
-
 				isReallyManual = true;
 			}
 			else if (lastTimeScale <= 0 && timeScale > 0) // Stopped pause or rewind
 			{
 				isReallyManual = isManual;
-				
+
 				if (lastTimeScale == 0) // Stopped pause
 				{
 					ApplySnapshot(zeroSnapshot);
-
 					var nav = component.GetComponent<UnityEngine.AI.NavMeshAgent>();
-
 					if (nav != null)
 					{
 						nav.destination = zeroDestination;
@@ -69,20 +66,39 @@ namespace Chronos
 				{
 					ApplySnapshot(interpolatedSnapshot);
 				}
-
 				WakeUp();
-
 				Record();
 			}
 
-			if (timeScale > 0 && timeScale != lastTimeScale && !isReallyManual) // Slowed down or accelerated
+			// When slowing down or accelerating, adjust forces using a Burst job.
+			if (timeScale > 0 && timeScale != lastTimeScale && !isReallyManual)
 			{
 				float modifier = timeScale / lastPositiveTimeScale;
 
-				realVelocity *= modifier;
-				realAngularVelocity *= modifier;
-				realDrag *= modifier;
-				realAngularDrag *= modifier;
+				NativeArray<RigidbodyProperties> propsArray = new NativeArray<RigidbodyProperties>(1, Allocator.TempJob);
+				RigidbodyProperties props;
+				props.velocity = realVelocity;
+				props.angularVelocity = realAngularVelocity;
+				props.drag = realDrag;
+				props.angularDrag = realAngularDrag;
+				propsArray[0] = props;
+
+				var job = new RigidbodyPropertiesMultiplierJob
+				{
+					multiplier = modifier,
+					result = propsArray
+				};
+
+				JobHandle handle = job.Schedule();
+				handle.Complete();
+
+				RigidbodyProperties newProps = propsArray[0];
+				propsArray.Dispose();
+
+				realVelocity = newProps.velocity;
+				realAngularVelocity = newProps.angularVelocity;
+				realDrag = newProps.drag;
+				realAngularDrag = newProps.angularDrag;
 
 				WakeUp();
 			}
@@ -90,7 +106,6 @@ namespace Chronos
 			if (timeScale > 0)
 			{
 				isReallyManual = isManual;
-
 				Progress();
 			}
 			else if (timeScale < 0)
@@ -116,18 +131,16 @@ namespace Chronos
 		#endregion
 
 		#region Snapshots
-		
+
 		public override void Reset()
 		{
 			lastPositiveTimeScale = 1;
-
 			base.Reset();
 		}
 
 		public override void ModifySnapshots(SnapshotModifier modifier)
 		{
 			base.ModifySnapshots(modifier);
-
 			zeroSnapshot = modifier(zeroSnapshot, zeroTime);
 		}
 
@@ -143,21 +156,19 @@ namespace Chronos
 		protected abstract float realAngularDrag { get; set; }
 		protected abstract bool IsSleeping();
 		protected abstract void WakeUp();
-		
 		protected abstract bool isManual { get; }
 
 		/// <summary>
-		/// The mass of the rigidbody before time effects. Use this property instead of Rigidbody.mass, which will be overwritten by the physics timer at runtime. 
+		/// The mass of the rigidbody before time effects.
 		/// </summary>
 		public float mass
 		{
-			// This isn't getting used right now, but leave it here for forward-compatibility
 			get { return realMass; }
 			set { realMass = value; }
 		}
 
 		/// <summary>
-		/// The drag of the rigidbody before time effects. Use this property instead of Rigidbody.drag, which will be overwritten by the physics timer at runtime. 
+		/// The drag of the rigidbody before time effects.
 		/// </summary>
 		public float drag
 		{
@@ -166,7 +177,7 @@ namespace Chronos
 		}
 
 		/// <summary>
-		/// The angular drag of the rigidbody before time effects. Use this property instead of Rigidbody.angularDrag, which will be overwritten by the physics timer at runtime. 
+		/// The angular drag of the rigidbody before time effects.
 		/// </summary>
 		public float angularDrag
 		{
@@ -202,7 +213,6 @@ namespace Chronos
 					Debug.LogWarning("Trying to change the " + property + " of the rigidbody while time is paused or rewinding, ignoring.");
 				}
 			}
-
 			return timeline.timeScale > 0;
 		}
 
@@ -219,7 +229,6 @@ namespace Chronos
 					Debug.LogWarning("Trying to apply a force to the rigidbody while time is paused or rewinding, ignoring.");
 				}
 			}
-
 			return timeline.timeScale > 0;
 		}
 

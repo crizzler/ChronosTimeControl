@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿using Unity.Collections;
+using Unity.Jobs;
+using UnityEngine;
 
 namespace Chronos
 {
@@ -7,7 +9,7 @@ namespace Chronos
 		private float _time;
 
 		/// <summary>
-		/// How long does the trail take to fade out before time effects. Use this property instead of TrailRenderer.time, which will be overwritten by the timeline at runtime. 
+		/// How long the trail takes to fade out before time effects.
 		/// </summary>
 		public float time
 		{
@@ -28,7 +30,19 @@ namespace Chronos
 
 		public override void AdjustProperties(float timeScale)
 		{
-			component.time = time / Mathf.Abs(timeScale);
+			NativeArray<float> jobResult = new NativeArray<float>(1, Allocator.TempJob);
+			var job = new TrailRendererTimeJob
+			{
+				baseTime = time,
+				timeScale = timeScale,
+				result = jobResult
+			};
+
+			JobHandle handle = job.Schedule();
+			handle.Complete();
+
+			component.time = jobResult[0];
+			jobResult.Dispose();
 		}
 	}
 }

@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿using Unity.Collections;
+using Unity.Jobs;
+using UnityEngine;
 
 namespace Chronos
 {
@@ -50,11 +52,22 @@ namespace Chronos
 
 		public override void AdjustProperties(float timeScale)
 		{
-			var suspensionSpring = component.suspensionSpring;
-			//suspensionSpring.spring = spring * timeScale;
-			//suspensionSpring.damper = damper * timeScale;
-			//suspensionSpring.targetPosition = targetPosition * timeScale;
-			component.suspensionSpring = suspensionSpring;
+			// Offload the multiplication of spring, damper, and targetPosition by timeScale to a Burst job.
+			NativeArray<JointSpring> jobResult = new NativeArray<JointSpring>(1, Allocator.TempJob);
+			var job = new WheelColliderSuspensionJob
+			{
+				baseSpring = spring,
+				baseDamper = damper,
+				baseTargetPosition = targetPosition,
+				timeScale = timeScale,
+				result = jobResult
+			};
+
+			JobHandle handle = job.Schedule();
+			handle.Complete();
+
+			component.suspensionSpring = jobResult[0];
+			jobResult.Dispose();
 		}
 	}
 }

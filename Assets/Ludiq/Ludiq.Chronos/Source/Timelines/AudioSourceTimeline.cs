@@ -1,3 +1,6 @@
+using Unity.Burst;
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 
 namespace Chronos
@@ -7,7 +10,7 @@ namespace Chronos
 		private float _pitch;
 
 		/// <summary>
-		/// The pitch that is applied to the audio source before time effects. Use this property instead of AudioSource.pitch, which will be overwritten by the timeline at runtime. 
+		/// The pitch applied to the audio source before time effects.
 		/// </summary>
 		public float pitch
 		{
@@ -28,7 +31,19 @@ namespace Chronos
 
 		public override void AdjustProperties(float timeScale)
 		{
-			component.pitch = pitch * timeScale;
+			// Offload the pitch calculation to a Burst job.
+			NativeArray<float> jobResult = new NativeArray<float>(1, Allocator.TempJob);
+			var job = new AudioSourcePitchJob
+			{
+				pitch = this.pitch,
+				timeScale = timeScale,
+				result = jobResult
+			};
+			JobHandle handle = job.Schedule();
+			handle.Complete();
+
+			component.pitch = jobResult[0];
+			jobResult.Dispose();
 		}
 	}
 }

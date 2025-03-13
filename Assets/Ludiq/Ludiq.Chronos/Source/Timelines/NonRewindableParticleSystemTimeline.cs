@@ -1,15 +1,17 @@
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 
 namespace Chronos
 {
 	public class NonRewindableParticleSystemTimeline : ComponentTimeline<ParticleSystem>, IParticleSystemTimeline
 	{
-		public NonRewindableParticleSystemTimeline(Timeline timeline, ParticleSystem component) : base(timeline, component) { }
-
 		private bool warnedRewind;
-
 		private float _playbackSpeed;
 
+		/// <summary>
+		/// The playback speed applied before time effects.
+		/// </summary>
 		public float playbackSpeed
 		{
 			get { return _playbackSpeed; }
@@ -28,11 +30,7 @@ namespace Chronos
 
 		public bool enableEmission
 		{
-			get
-			{
-				return component.emission.enabled;
-			}
-
+			get { return component.emission.enabled; }
 			set
 			{
 				// http://forum.unity3d.com/threads/enabling-emission.364258/
@@ -41,40 +39,17 @@ namespace Chronos
 			}
 		}
 
-		public bool isPlaying
-		{
-			get { return component.isPlaying; }
-		}
+		public bool isPlaying { get { return component.isPlaying; } }
+		public bool isPaused { get { return component.isPaused; } }
+		public bool isStopped { get { return component.isStopped; } }
 
-		public bool isPaused
-		{
-			get { return component.isPaused; }
-		}
+		public void Play(bool withChildren = true) { component.Play(withChildren); }
+		public void Pause(bool withChildren = true) { component.Pause(withChildren); }
+		public void Stop(bool withChildren = true) { component.Stop(withChildren); }
+		public bool IsAlive(bool withChildren = true) { return component.IsAlive(withChildren); }
 
-		public bool isStopped
-		{
-			get { return component.isStopped; }
-		}
-
-		public void Play(bool withChildren = true)
-		{
-			component.Play(withChildren);
-		}
-
-		public void Pause(bool withChildren = true)
-		{
-			component.Pause(withChildren);
-		}
-
-		public void Stop(bool withChildren = true)
-		{
-			component.Stop(withChildren);
-		}
-
-		public bool IsAlive(bool withChildren = true)
-		{
-			return component.IsAlive(withChildren);
-		}
+		public NonRewindableParticleSystemTimeline(Timeline timeline, ParticleSystem component)
+			: base(timeline, component) { }
 
 		public override void CopyProperties(ParticleSystem source)
 		{
@@ -89,8 +64,21 @@ namespace Chronos
 				warnedRewind = true;
 			}
 
-			var mainSystem = component.main;
-			mainSystem.simulationSpeed = playbackSpeed * timeScale;
+			// Offload multiplication to a Burst job.
+			NativeArray<float> jobResult = new NativeArray<float>(1, Allocator.TempJob);
+			var job = new ParticleSystemSpeedJob
+			{
+				playbackSpeed = this.playbackSpeed,
+				timeScale = timeScale,
+				result = jobResult
+			};
+
+			JobHandle handle = job.Schedule();
+			handle.Complete();
+
+			var mainModule = component.main;
+			mainModule.simulationSpeed = jobResult[0];
+			jobResult.Dispose();
 		}
 	}
 }

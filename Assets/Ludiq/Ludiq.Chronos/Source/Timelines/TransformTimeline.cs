@@ -1,27 +1,36 @@
+using Unity.Burst;
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 
 namespace Chronos
 {
 	public class TransformTimeline : RecorderTimeline<Transform, TransformTimeline.Snapshot>
 	{
-		// Scale is disabled by default because it usually doesn't change and 
-		// would otherwise take more memory. Feel free to uncomment the lines
-		// below if you need to record it.
-
+		// Make sure your snapshot struct is blittable.
 		public struct Snapshot
 		{
 			public Vector3 position;
 			public Quaternion rotation;
-			//public Vector3 scale;
 
+			// Refactored to call the job-based interpolation.
 			public static Snapshot Lerp(Snapshot from, Snapshot to, float t)
 			{
-				return new Snapshot()
+				NativeArray<Snapshot> result = new NativeArray<Snapshot>(1, Allocator.TempJob);
+				var job = new TransformSnapshotLerpJob
 				{
-					position = Vector3.Lerp(from.position, to.position, t),
-					rotation = Quaternion.Lerp(from.rotation, to.rotation, t),
-					//scale = Vector3.Lerp(from.scale, to.scale, t)
+					from = from,
+					to = to,
+					t = Mathf.Clamp01(t),
+					result = result
 				};
+
+				JobHandle handle = job.Schedule();
+				handle.Complete();
+
+				Snapshot interpolated = result[0];
+				result.Dispose();
+				return interpolated;
 			}
 		}
 
@@ -34,11 +43,10 @@ namespace Chronos
 
 		protected override Snapshot CopySnapshot()
 		{
-			return new Snapshot()
+			return new Snapshot
 			{
 				position = component.position,
-				rotation = component.rotation,
-				//scale = component.localScale
+				rotation = component.rotation
 			};
 		}
 
@@ -46,7 +54,6 @@ namespace Chronos
 		{
 			component.position = snapshot.position;
 			component.rotation = snapshot.rotation;
-			//component.localScale = snapshot.scale;
 		}
 	}
 }

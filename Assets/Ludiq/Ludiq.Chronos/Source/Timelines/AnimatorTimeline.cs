@@ -1,3 +1,6 @@
+using Unity.Burst;
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 
 namespace Chronos
@@ -9,7 +12,7 @@ namespace Chronos
 		private float _speed;
 
 		/// <summary>
-		/// The speed that is applied to the animator before time effects. Use this property instead of Animator.speed, which will be overwritten by the timeline at runtime. 
+		/// The speed applied to the animator before time effects.
 		/// </summary>
 		public float speed
 		{
@@ -25,8 +28,7 @@ namespace Chronos
 		{
 			get
 			{
-				// TODO: Proper FPS anticipation, with Application.targetFrameRate and v-sync
-				// http://docs.unity3d.com/ScriptReference/Application-targetFrameRate.html
+				// TODO: Proper FPS anticipation, with Application.targetFrameRate and v-sync.
 				return Mathf.Clamp((int)(timeline.recordingDuration * 60), 1, 10000);
 			}
 		}
@@ -40,7 +42,20 @@ namespace Chronos
 		{
 			if (timeScale > 0)
 			{
-				component.speed = speed * timeScale;
+				// Offload the multiplication to a Burst job.
+				NativeArray<float> jobResult = new NativeArray<float>(1, Allocator.TempJob);
+				var job = new AnimatorSpeedJob
+				{
+					speed = this.speed,
+					timeScale = timeScale,
+					result = jobResult
+				};
+
+				JobHandle handle = job.Schedule();
+				handle.Complete();
+
+				component.speed = jobResult[0];
+				jobResult.Dispose();
 			}
 			else
 			{
@@ -71,16 +86,11 @@ namespace Chronos
 				float timeScale = timeline.timeScale;
 				float lastTimeScale = timeline.lastTimeScale;
 
-				// TODO: Refactor and put the recorder offline when time is paused
-
 				if (lastTimeScale >= 0 && timeScale < 0) // Started rewind
 				{
 					component.StopRecording();
 
-					// There seems to be a bug in some cases in which no data is recorded
-					// and recorder start and stop time are at -1. Can't seem to figure
-					// when or why it happens, though. Temporary hotfix to disable playback
-					// in that case.
+					// Temporary hotfix: If no data was recorded, warn the user.
 					if (component.recorderStartTime < 0)
 					{
 						Debug.LogWarning("Animator timeline failed to record for unknown reasons.\nSee: http://forum.unity3d.com/threads/341203/", component);
@@ -99,7 +109,6 @@ namespace Chronos
 				else if (timeScale < 0 && component.recorderMode == AnimatorRecorderMode.Playback) // Rewinding
 				{
 					float playbackTime = Mathf.Max(component.recorderStartTime, component.playbackTime + timeline.deltaTime);
-
 					component.playbackTime = playbackTime;
 				}
 			}
