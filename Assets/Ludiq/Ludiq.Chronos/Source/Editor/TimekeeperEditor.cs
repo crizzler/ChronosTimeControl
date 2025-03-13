@@ -47,7 +47,7 @@ namespace Chronos
 		[MenuItem("GameObject/Timekeeper", false, 12)]
 		private static void MenuCommand(MenuCommand menuCommand)
 		{
-			if (GameObject.FindObjectOfType<Timekeeper>() != null)
+			if (GameObject.FindFirstObjectByType<Timekeeper>() != null)
 			{
 				EditorUtility.DisplayDialog("Chronos", "The scene already contains a timekeeper.", "OK");
 				return;

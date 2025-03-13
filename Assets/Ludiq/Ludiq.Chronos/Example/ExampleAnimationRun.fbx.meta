@@ -1523,3 +1523,10 @@ ModelImporter:
   additionalBone: 0
   userData: 
   assetBundleName: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 31225
+  packageName: Chronos
+  packageVersion: 2.4.15
+  assetPath: Assets/Ludiq/Ludiq.Chronos/Example/ExampleAnimationRun.fbx
+  uploadId: 322034

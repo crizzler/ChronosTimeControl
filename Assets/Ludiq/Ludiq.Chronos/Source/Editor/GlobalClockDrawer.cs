@@ -15,7 +15,7 @@ public class GlobalClockDrawer : PropertyDrawer
 
 		List<PopupOption<string>> options = new List<PopupOption<string>>();
 
-		if (UnityObject.FindObjectOfType<Timekeeper>() != null)
+		if (UnityObject.FindFirstObjectByType<Timekeeper>() != null)
 		{
 			Timekeeper timekeeper = Timekeeper.instance;
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEngine;
 
 namespace Chronos
@@ -12,13 +13,19 @@ namespace Chronos
 		const string PluginName = "Chronos";
 		const string DefinePrefix = "CHRONOS_";
 
-		static readonly Addon[] addons = 
+		static readonly Addon[] addons =
 		{
 			new Addon()
 			{
 				name = "PlayMaker",
 				define = "PLAYMAKER",
 				filePattern = "PlayMakerMainMenu.cs"
+			},
+			new Addon()
+			{
+				name = "GameCreator2",
+				define = "GAMECREATOR2",
+				filePattern = "GameCreator.Runtime.Core.asmdef"
 			}
 		};
 
@@ -92,13 +99,9 @@ namespace Chronos
 				}
 			}
 
-			// Adapted from Demigiant's awesome voodoo.
-			// He makes some rad stuff, have a look! http://demigiant.com/ 
-
 			public bool AddDefine()
 			{
 				bool added = false;
-
 				string define = DefinePrefix + this.define;
 
 				foreach (BuildTargetGroup group in Enum.GetValues(typeof(BuildTargetGroup)))
@@ -113,13 +116,18 @@ namespace Chronos
 						continue;
 					}
 
-					List<string> defines = PlayerSettings.GetScriptingDefineSymbolsForGroup(group).Split(';').Select(d => d.Trim()).ToList();
+					// Convert BuildTargetGroup to NamedBuildTarget and use new API methods.
+					NamedBuildTarget namedTarget = NamedBuildTarget.FromBuildTargetGroup(group);
+					string currentSymbols = PlayerSettings.GetScriptingDefineSymbols(namedTarget);
+					List<string> defines = currentSymbols.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+														 .Select(d => d.Trim())
+														 .ToList();
 
 					if (!defines.Contains(define))
 					{
 						added = true;
 						defines.Add(define);
-						PlayerSettings.SetScriptingDefineSymbolsForGroup(group, string.Join(";", defines.ToArray()));
+						PlayerSettings.SetScriptingDefineSymbols(namedTarget, string.Join(";", defines));
 					}
 				}
 
@@ -129,7 +137,6 @@ namespace Chronos
 			public bool RemoveDefine()
 			{
 				bool removed = false;
-
 				string define = DefinePrefix + this.define;
 
 				foreach (BuildTargetGroup group in Enum.GetValues(typeof(BuildTargetGroup)))
@@ -144,13 +151,17 @@ namespace Chronos
 						continue;
 					}
 
-					List<string> defines = PlayerSettings.GetScriptingDefineSymbolsForGroup(group).Split(';').Select(d => d.Trim()).ToList();
+					NamedBuildTarget namedTarget = NamedBuildTarget.FromBuildTargetGroup(group);
+					string currentSymbols = PlayerSettings.GetScriptingDefineSymbols(namedTarget);
+					List<string> defines = currentSymbols.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+														 .Select(d => d.Trim())
+														 .ToList();
 
 					if (defines.Contains(define))
 					{
 						removed = true;
 						defines.Remove(define);
-						PlayerSettings.SetScriptingDefineSymbolsForGroup(group, string.Join(";", defines.ToArray()));
+						PlayerSettings.SetScriptingDefineSymbols(namedTarget, string.Join(";", defines));
 					}
 				}
 
