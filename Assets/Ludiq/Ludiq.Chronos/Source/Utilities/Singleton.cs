@@ -24,7 +24,7 @@ namespace Chronos
 			{
 				if (!Application.isPlaying)
 				{
-					T[] instances = FindObjectsOfType<T>();
+					T[] instances = FindObjectsByType<T>(FindObjectsInactive.Include, FindObjectsSortMode.None);
 
 					if (instances.Length == 1)
 					{
@@ -54,7 +54,7 @@ namespace Chronos
 				{
 					if (_instance == null)
 					{
-						T[] instances = FindObjectsOfType<T>();
+						T[] instances = FindObjectsByType<T>(FindObjectsInactive.Include, FindObjectsSortMode.None);
 
 						if (instances.Length == 1)
 						{
