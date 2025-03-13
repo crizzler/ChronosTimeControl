@@ -22,6 +22,7 @@ Compatibility
 - Any platform
 
 Integrations
+- Game Creator 2
 - PlayMaker
 - NodeCanvas
 - Behavior Designer
