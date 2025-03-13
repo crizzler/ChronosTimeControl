@@ -15,7 +15,7 @@ Features
 - Automatically applies to animations, particle effects, nav mesh agents and audio
 
 Compatibility
-- Free (Personal) or Pro
+- Unity 6
 - 2D or 3D
 - C# or UnityScript (JavaScript)
 - Any platform
