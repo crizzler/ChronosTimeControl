@@ -82,10 +82,10 @@ namespace Chronos
 				position = component.transform.position,
 				rotation = component.transform.rotation,
 				// scale = component.transform.localScale,
-				velocity = navMeshAgent == null ? component.velocity : navMeshAgent.velocity,
+				velocity = navMeshAgent == null ? component.linearVelocity : navMeshAgent.velocity,
 				angularVelocity = component.angularVelocity,
-				drag = component.drag,
-				angularDrag = component.angularDrag,
+				drag = component.linearDamping,
+				angularDrag = component.angularDamping,
 				lastPositiveTimeScale = lastPositiveTimeScale
 			};
 		}
@@ -110,18 +110,24 @@ namespace Chronos
 			{
 				if (navMeshAgent == null)
 				{
-					component.velocity = snapshot.velocity;
+					if (!component.isKinematic)
+					{
+						component.linearVelocity = snapshot.velocity;
+					}
 				}
 				else
 				{
 					navMeshAgent.velocity = snapshot.velocity;
 				}
 
-				component.angularVelocity = snapshot.angularVelocity;
+				if (!component.isKinematic)
+				{
+					component.angularVelocity = snapshot.angularVelocity;
+				}
 			}
 
-			component.drag = snapshot.drag;
-			component.angularDrag = snapshot.angularDrag;
+			component.linearDamping = snapshot.drag;
+			component.angularDamping = snapshot.angularDrag;
 
 			lastPositiveTimeScale = snapshot.lastPositiveTimeScale;
 		}
@@ -156,8 +162,8 @@ namespace Chronos
 
 		protected override Vector3 realVelocity
 		{
-			get { return component.velocity; }
-			set { component.velocity = value; }
+			get { return component.linearVelocity; }
+			set { component.linearVelocity = value; }
 		}
 
 		protected override Vector3 realAngularVelocity
@@ -168,14 +174,14 @@ namespace Chronos
 
 		protected override float realDrag
 		{
-			get { return component.drag; }
-			set { component.drag = value; }
+			get { return component.linearDamping; }
+			set { component.linearDamping = value; }
 		}
 
 		protected override float realAngularDrag
 		{
-			get { return component.angularDrag; }
-			set { component.angularDrag = value; }
+			get { return component.angularDamping; }
+			set { component.angularDamping = value; }
 		}
 
 		protected override void WakeUp()
