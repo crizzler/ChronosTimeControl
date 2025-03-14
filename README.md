@@ -18,7 +18,6 @@ Features
 Compatibility
 - Unity 6
 - 2D or 3D
-- C# or UnityScript (JavaScript)
 - Any platform
 
 Integrations
